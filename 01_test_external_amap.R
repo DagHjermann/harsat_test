@@ -64,7 +64,7 @@ check_assessment(biota_assessment, save_result = FALSE)
 #   extra_output = "power" ensures that the power metrics for lognormally distributed 
 #   data will be exported.
 
-summary.dir <- file.path("output", "amap")
+summary.dir <- file.path("output", "ospar")
 
 if (!dir.exists(summary.dir)) {
   dir.create(summary.dir, recursive = TRUE)
@@ -72,7 +72,7 @@ if (!dir.exists(summary.dir)) {
 
 write_summary_table(
   biota_assessment,
-  output_file = "biota-FO-PW-test-output.csv",   # NB, file will be overwritten so change name as appropriate to retain results
+  output_file = "biota-30B-test-output.csv",   # NB, file will be overwritten so change name as appropriate to retain results
   output_dir = summary.dir,
   export = TRUE,
   determinandGroups = NULL,
@@ -81,4 +81,4 @@ write_summary_table(
   extra_output = "power"
 )
 
-res <- read.csv(paste0(summary.dir, "/biota-FO-PW-test-output.csv"))
+res <- read.csv(paste0(summary.dir, "/biota-30B-test-output.csv"))
