@@ -8,7 +8,7 @@
 library(harsat)
 library(dplyr)
 
-readLines(("data/example_OSPAR/biota.txt"), 3)
+# readLines(("data/example_OSPAR/biota.txt"), 3)
 dat_all <- read.csv("data/example_OSPAR/biota.txt", sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 xtabs(~country, dat_all)
 xtabs(~statn, dat_all %>% filter(country == "Norway"))
@@ -112,7 +112,6 @@ if (!dir.exists(plot.dir)) {
 
 plot_assessment(
   biota_assessment,
-  subset = 1:10,
   output_dir = plot.dir,
   file_type = c("data", "index"),
   file_format = "png"
