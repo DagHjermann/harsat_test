@@ -14,7 +14,7 @@ library(dplyr)
 library(readr)
 
 #
-# Norwegian data (from Milkys) ---------------------------------------------------------------------------
+# Prepare Norwegian data (from Milkys) ---------------------------------------------------------------------------
 #
 
 #
@@ -43,6 +43,8 @@ table(subset(dat_stations, station_country == "Norway")$station_name)
 # data_ices <- read_ices_file(fn)
 # data_ices <- add_field_codes(data_ices)
 
+# Data submitted to ICES  
+# - used to make 'lookup_statn', plus to check station names etc
 fn <- "../Milkys2_pc/Files_to_ICES/2022/Rdata/842_NIVA2022CF_08.rds"
 data_ices <- readRDS(fn)
 length(data_ices)
@@ -50,6 +52,9 @@ str(data_ices, 1)
 data_91 <- data_ices[["91"]]
 # table(data_91$STNNO)
 # table(data_91$STATN)
+
+# readLines("data/example_OSPAR/stations.txt", n = 2)
+dat_stations <- readr::read_tsv("data/example_OSPAR/stations.txt", guess_max = 15000)
 
 # Are all ICES station names from table 91 (which also contains NIVA codes) also found in the station dictionary.?
 statn_1 <- unique(data_91$STATN) 
@@ -248,6 +253,10 @@ readr::write_csv(
   subset(dat_stations, station_country == "Norway") %>% rename(country = station_country),
   "data/example_external_data/ICES_DOME_STATIONS_20230829_NO.csv")
 
+#
+# read_data ------------------------------------------------------------------------
+#
+
 biota_data <- read_data(
   compartment = "biota",
   purpose = "OSPAR",
@@ -260,20 +269,31 @@ biota_data <- read_data(
 
 
 #
-# Prepare data for next stage -------------------------------------
+# tidy_data  ------------------------------------------------------
 #
 
 biota_data <- tidy_data(biota_data)
 
 #
-# Construct timeseries --------------------------------------------
+# create_timeseries --------------------------------------------
 #
-
 
 oddities.dir <- file.path("oddities", "milkys")
 if (!dir.exists(oddities.dir)) {
   dir.create(oddities.dir, recursive = TRUE)
 } 
+
+# debugonce(create_timeseries)
+
+
+# biota_data$data should not include country and station_name  
+# - will lead to an error in left_join on station_code
+# IMPROVEMENT: deleting these variable this should happen automatically, with a warning 
+
+if ("country" %in% names(biota_data$data))
+  biota_data$data$country <- NULL
+if ("station_name" %in% names(biota_data$data))
+  biota_data$data$station_name <- NULL
 
 biota_timeseries <- create_timeseries(
   biota_data,
@@ -287,14 +307,27 @@ biota_timeseries <- create_timeseries(
   normalise.control = list()
 )
 
+# IMPROVEMENT: Could be added at the end of create_time series
 cat("Number of time series created:", nrow(biota_timeseries$timeSeries), "\n")
 
 dir("oddities/biota")
-read.csv("oddities/biota/species_group_queries.csv")
-read.csv("oddities/biota/unit_queries.csv")
+check <- read.csv("oddities/biota/method_analysis_queries.csv")
+head(check, 3)
+table(check$determinand)
+
+check <- read.csv("oddities/biota/species_group_queries.csv")
+nrow(check)
+head(check, 3)
+table(check$species_group)
+
+check <- read.csv("oddities/biota/value_queries.csv")
+nrow(check)
+head(check, 3)
+table(addNA(check$value))
+check %>% filter(value == 120)  # drywt% over 100  
 
 #
-# Assessment ------------------------------------------------------
+# run_assessment ------------------------------------------------------
 #
 
 # str(biota_timeseries, 1)
@@ -303,6 +336,7 @@ read.csv("oddities/biota/unit_queries.csv")
 
 #
 # We pick just a few, using the 'subset' option in 'biota_assessment'  
+# IMPROVEMENT (documentation):
 # The 'subset' option takes a boolean vector (TRUE/FALSE) the same length as 'biota_timeseries$timeSeries'  
 #
 
@@ -311,25 +345,48 @@ sel_series <- biota_timeseries$timeSeries$determinand %in% params
 length(sel_series)
 sum(sel_series)
 
-biota_assessment <- run_assessment(
-  biota_timeseries,
-  subset = sel_series,
-  AC = NULL,
-  get_AC_fn = NULL,
-  recent_trend = 20,
-  parallel = FALSE, 
-  extra_data = NULL,
-  control = list(power = list(target_power = 80, target_trend = 10)) 
-)
+rerun_assessment <- FALSE
 
-# saveRDS(biota_assessment, "data/example_external_data/OSPAR_NO_2022_assessment.rds")
-# biota_assessment <- readRDS("data/example_external_data/OSPAR_NO_2022_assessment.rds")
+if (rerun_assessment){
+  # Takes 10 minutes appx.
+  
+  biota_assessment <- run_assessment(
+    biota_timeseries,
+    subset = sel_series,
+    AC = NULL,
+    get_AC_fn = NULL,
+    recent_trend = 20,
+    parallel = FALSE, 
+    extra_data = NULL,
+    control = list(power = list(target_power = 80, target_trend = 10)) 
+  )
+  
+  # saveRDS(biota_assessment, "data/example_external_data/OSPAR_NO_2022_assessment.rds")
+  
+} else {
+  biota_assessment <- readRDS("data/example_external_data/OSPAR_NO_2022_assessment.rds")
+}
+
+# the original time series:
+head(biota_assessment$timeSeries, 2)
+
+# NOTE: returns assessment object with length equal to the entire data set  
+length(biota_assessment$assessment)
+lacking <- purrr::map_lgl(biota_assessment$assessment, is.null)
+mean(lacking)
+sum(!lacking)
+
+i <- which(!lacking)[1]
+str(biota_assessment$assessment[[i]], 1)
+
+
 
 #
-# Check convergence ---------------------------------------------
+# check_assessment (checks convergence) ---------------------------------------------
 #
 
 check_assessment(biota_assessment, save_result = FALSE)
+# Only one!
 
 #
 # Summary files ----------------------------------------------------------------------
@@ -356,10 +413,8 @@ write_summary_table(
   extra_output = "power"
 )
 
-# Note: even if we 
 res_entire_dataset <- read.csv(paste0(summary.dir, "/", fn))
 nrow(res_entire_dataset)
-
 res <- res_entire_dataset %>% filter(shape != "") 
 nrow(res)
 
@@ -375,11 +430,21 @@ if (!dir.exists(plot.dir)) {
   dir.create(plot.dir, recursive = TRUE)
 } 
 
+# IMPROVEMEMT:
+# need to specify 'subset = sel_series' where 'sel_series' 
+#   are assessments you have already done
+# otherwise the error will be trsange
+
+# MAke 'sel_series2', a subset of 'sel_series'
+which(sel_series)
+sel_series2 <- rep(FALSE, length(sel_series))
+sel_series2[which(sel_series)[1:3]] <- TRUE
+which(sel_series2)
 
 # debugonce(plot_assessment)
 plot_assessment(
   biota_assessment,
-  subset = sel_series,     # need to specify subset here as well
+  subset = sel_series2,     # need to specify subset here as well
   output_dir = plot.dir,
   file_type = c("data", "index"),
   file_format = "png"
