@@ -1,5 +1,5 @@
 
-plot_assessment2 <- function(
+plot_assessment <- function(
     assessment_obj, 
     subset = NULL, 
     output_dir = ".",
@@ -33,6 +33,9 @@ plot_assessment2 <- function(
   }
   
   
+  
+  
+  
   info <- assessment_obj$info
   timeSeries <- assessment_obj$timeSeries 
   
@@ -49,7 +52,6 @@ plot_assessment2 <- function(
     assessment_obj$stations, 
     by = "station_code"
   )
-  
   
   timeSeries$group <- ctsm_get_info(
     info$determinand, 
@@ -69,10 +71,84 @@ plot_assessment2 <- function(
     timeSeries$matrix <- "WT"
   }
   
-  timeSeries <- harsat:::apply_subset(timeSeries, subset, parent.frame())
+  timeSeries <- apply_subset(timeSeries, subset, parent.frame())
   
   series_id <- row.names(timeSeries)
   
-  browser()
   
-}
+  # plot each timeSeries
+  
+  lapply(series_id, function(id) {
+    
+    data <- dplyr::filter(assessment_obj$data, seriesID == id)
+    
+    assessment <- assessment_obj$assessment[[id]]
+    
+    
+    # get relevant series info
+    
+    series <- timeSeries[id, ]
+    
+    
+    # get file name from id, and add country and station name 
+    # for easier identification
+    
+    output_id <- sub(
+      series$station_code,
+      paste(series$station_code, series$country, series$station_name), 
+      id,
+      fixed=TRUE
+    )
+    
+    
+    # get rid of any slashes that might have crept in 
+    
+    output_id <- gsub(" / ", " ", output_id, fixed = TRUE)
+    output_id <- gsub("/", " ", output_id, fixed = TRUE)
+    
+    output_id <- gsub(" \ ", " ", output_id, fixed = TRUE)
+    output_id <- gsub("\\", " ", output_id, fixed = TRUE)
+    
+    
+    # plot assessment with index
+    
+    if ("index" %in% file_type) {
+      
+      output_file <- paste0(output_id, " index.", file_format)
+      output_file <- file.path(output_dir, output_file)
+      
+      switch(
+        file_format, 
+        png = png(output_file, width = 680, height = 480), 
+        pdf = pdf(output_file, width = 7, height = 7 * 12 / 17)
+      )
+      
+      plot.data(data, assessment, series, info, type = "assessment", xykey.cex = 1.4) 
+      dev.off()
+      
+    }    
+    
+    
+    # plot assessment with data
+    
+    if ("data" %in% file_type) {
+      
+      output_file <- paste0(output_id, " data.", file_format)
+      output_file <- file.path(output_dir, output_file)
+      
+      switch(
+        file_format, 
+        png = png(output_file, width = 680, height = 480), 
+        pdf = pdf(output_file, width = 7, height = 7 * 12 / 17)
+      )
+      
+      plot.data(data, assessment, series, info, type = "data", xykey.cex = 1.4)
+      dev.off()
+      
+    }  
+    
+  })
+  
+  invisible() 
+}  
+
