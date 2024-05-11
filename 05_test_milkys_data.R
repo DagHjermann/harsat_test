@@ -389,7 +389,7 @@ check_assessment(biota_assessment, save_result = FALSE)
 # Only one!
 
 #
-# Summary files ----------------------------------------------------------------------
+# write_summary_table ----------------------------------------------------------------------
 #
 # This writes the summary data to a file in output/example_external_data. The argument 
 #   extra_output = "power" ensures that the power metrics for lognormally distributed 
@@ -422,7 +422,7 @@ table(addNA(res$shape))
 
 
 #
-# Plots ---------------------------------------------------------------------------
+# plot_assessment ---------------------------------------------------------------------------
 #
 
 plot.dir <- file.path("plots", "milkys")
@@ -433,7 +433,7 @@ if (!dir.exists(plot.dir)) {
 # IMPROVEMEMT:
 # need to specify 'subset = sel_series' where 'sel_series' 
 #   are assessments you have already done
-# otherwise the error will be trsange
+# otherwise the error will be hard to understand  
 
 # MAke 'sel_series2', a subset of 'sel_series'
 which(sel_series)
@@ -442,6 +442,10 @@ sel_series2[which(sel_series)[1:3]] <- TRUE
 which(sel_series2)
 
 # debugonce(plot_assessment)
+# debugonce(harsat:::plot.data)
+#   harsat:::plot.data contains the plotting itself  
+# plot.scales
+# plot.AC
 plot_assessment(
   biota_assessment,
   subset = sel_series2,     # need to specify subset here as well
@@ -466,9 +470,44 @@ nm1 <- c(nm1a, nm1b)
 nm2 <- sub(".png", "", dir(plot.dir), fixed = TRUE)
 setdiff(nm2, nm1)
 
-# 10921 Norway 24B Bergen harbour CB101 Gadus morhua LI NA index.png
+# the extra plot is:
+#   10921 Norway 24B Bergen harbour CB101 Gadus morhua LI NA index.png
+# so, for some reason, one CB101 series is also included :-D 
 
-# for some reason, one CB101 series is also included :-D 
+
+#
+# get_assessment_data ----------------------------------------------------------------------------
+#
+
+plotdat <- get_assessment_data(
+  biota_assessment,
+  subset = sel_series2)
+
+str(plotdat[[i]], 1)
+str(plotdat[[i]]$assessment, 1)
+str(plotdat[[i]]$assessment$contrasts, 1)
+str(plotdat[[i]]$info, 1)
+
+library(ggplot2)
+
+i <- 2
+plotdat[[i]]$assessment$fullData
+ggplot(plotdat[[i]]$assessment$fullData, aes(year)) +
+  geom_ribbon(
+    data = plotdat[[i]]$assessment$pred, 
+    aes(ymin = exp(ci.lower), ymax = exp(ci.upper)),  # note; hard-coded exp
+    fill = "lightblue") + 
+  geom_path(
+    data = plotdat[[i]]$assessment$pred, 
+    aes(y = exp(fit))) + 
+  geom_point(
+    aes(y = concentration, color = censoring),
+    color = "darkred") +
+  scale_y_log10() +
+  labs(title = plotdat[[i]]$output_id)
+
+str(plotdat[[i]]$info, 1)
+
 
 #
 # Report ----------------------------------------------------------------------------
@@ -490,6 +529,11 @@ sel_series2 <- with(biota_timeseries$timeSeries,
                     determinand %in% params & station_code %in% sts)
 length(sel_series2)
 sum(sel_series2)
+
+# debugonce(report_assessment)
+
+# the actual stuff going on here is found in 'report_assessment.Rmd'  
+# in C:\R\Library\harsat\markdown
 
 report_assessment(
   biota_assessment,
