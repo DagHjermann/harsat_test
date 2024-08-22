@@ -29,9 +29,12 @@ names(dat_orig_1)
 
 #
 
-# Need 'read_tsv' from the rear package to read this properly  
+# Note: Need 'read_tsv' from the readr package to read this properly  
 dat_stations <- readr::read_tsv("data/example_external_data/ICES_DOME_STATIONS_20230829.txt", guess_max = 7000)
-table(subset(dat_stations, station_country == "Norway")$station_name)
+
+# Norwegian stations  
+tab <- table(subset(dat_stations, station_country == "Norway")$station_name)
+length(tab)
 
 #
 # . Lookup data for ICES station names (STATN / station_name) -------
@@ -62,7 +65,9 @@ statn_2 <- unique(dat_stations$station_name)
 check <- statn_1 %in% statn_2
 
 if (mean(check) < 1){
-  stop("some stations in data_91 are not found in the ICES station dictionary")
+  stop("Some stations in data_91 are not found in the ICES station dictionary")
+} else {
+  message("All stations in data_91 are found in the ICES station dictionary")
 }
 
 lookup_statn <- bind_rows(
@@ -145,8 +150,8 @@ lookup_sampleid$sample <- seq_len(nrow(lookup_sampleid))
 # 'matrix'
 # based on code in '842_ICES_submission_2022data.Rmd' 
 lookup_matrix <- tibble(
-  TISSUE_NAME = c("Muskel", "Blod", "Galle", "Liver - microsome", "Lever"),
-  matrix = c("MU", "BL", "BI", "LIMIC", "LI")
+  TISSUE_NAME = c("Muskel", "Blod", "Galle", "Liver - microsome", "Lever", "Whole soft body"),
+  matrix = c("MU", "BL", "BI", "LIMIC", "LI", "SB")
 )
 # table(dat_orig_4$TISSUE_NAME)
 # table(data_ices[["10"]]$MATRX)
@@ -169,7 +174,10 @@ lookup_unit <- data.frame(
 # . Create dat_orig_4 -----------------
 #
 
-# Add 3 columns by left join: station_code (for ICES, a number), 'sample' (sample ID) and 'matrix'     
+# Add 3 columns by left join: 
+# - station_code (for ICES, a number)
+# - 'sample' (sample ID)
+# - 'matrix'     
 # Also filter away (for now) some "difficult" units
 dat_orig_4 <- dat_orig_3 %>% 
   left_join(
@@ -184,12 +192,13 @@ dat_orig_4 <- dat_orig_3 %>%
   left_join(
     lookup_unit, 
     by = c("UNIT"), relationship = "many-to-one") %>%
+  # remove rows where we couldn't find the corresponding maxtrix or unit  
   filter(
     !is.na(matrix) & !is.na(unit))
 
-cat("--------------------------------------\nOriginal units:\n--------------------------------------\n")
+cat("----------------------------------------------\nOriginal units:\n----------------------------------------------\n")
 table(dat_orig_3$UNIT)
-cat("--------------------------------------\nDeleted units:\n--------------------------------------\n")
+cat("----------------------------------------------\nDeleted data with the following units:\n----------------------------------------------\n")
 setdiff(unique(dat_orig_3$UNIT), unique(dat_orig_4$UNIT))
 
 
@@ -267,6 +276,9 @@ biota_data <- read_data(
   info_dir = file.path("information", "OSPAR_2022")
 )
 
+str(biota_data, 1)
+str(biota_data$info, 1)
+str(biota_data$info$thresholds, 1)
 
 #
 # tidy_data  ------------------------------------------------------
@@ -326,6 +338,9 @@ head(check, 3)
 table(addNA(check$value))
 check %>% filter(value == 120)  # drywt% over 100  
 
+str(biota_timeseries, 1)
+str(biota_timeseries$info$thresholds, 1)
+
 #
 # run_assessment ------------------------------------------------------
 #
@@ -373,10 +388,16 @@ head(biota_assessment$timeSeries, 2)
 # NOTE: returns assessment object with length equal to the entire data set  
 length(biota_assessment$assessment)
 lacking <- purrr::map_lgl(biota_assessment$assessment, is.null)
-mean(lacking)
-sum(!lacking)
+cat(100*mean(lacking), "percent of the", length(lacking), "time series were not assessed")
+cat(sum(!lacking), "time series were assessed")
 
+# check the assessment object of the first time series
+i <- 1
+str(biota_assessment$assessment[[i]], 1)
+
+# check the assessment object of the first assessed time series
 i <- which(!lacking)[1]
+i
 str(biota_assessment$assessment[[i]], 1)
 
 
@@ -540,6 +561,8 @@ report_assessment(
   subset = sel_series2,
   output_dir = report.dir
 )
+
+
 
 
 
