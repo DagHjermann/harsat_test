@@ -400,7 +400,10 @@ i <- which(!lacking)[1]
 i
 str(biota_assessment$assessment[[i]], 1)
 
-
+#
+# Get trends using self-defind function 'get_trend_symbol'  
+#
+get_trend_symbols(biota_assessment)
 
 #
 # check_assessment (checks convergence) ---------------------------------------------

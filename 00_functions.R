@@ -93,3 +93,39 @@ get_assessment_data <- function(
   
 }  
 
+
+get_trend_symbols <- function(assessment_object, alpha = 0.05){
+  
+  # Get all summaries (empty or not)
+  summ_all <- purrr::map(assessment_object$assessment, "summary")
+  # names(summ_all)[1:3]
+  # summ_all[[2]]
+  
+  # Get boolean variable for whether there is a result  
+  summ_has_result <- purrr::map_lgl(summ_all, \(.) length(.) > 0)
+  # summ_has_result[1:3]
+
+  # Get non-empty summaries 
+  summ <- summ_all[summ_has_result] %>% bind_rows()
+  summ$series <- names(summ_all[summ_has_result])
+  # head(summ)
+  
+  # Code based on start of harsat:::ctsm_symbology_OSPAR
+  # - Only change: 'summary' in line 1 and 2 replaced with 'summ'
+  with(summ, {
+    shape <- character(nrow(summ))
+    trendFit <- !is.na(pltrend)
+    shape[trendFit] <- "large_filled_circle"
+    isTrend <- !is.na(prtrend) & prtrend < alpha
+    upTrend <- isTrend & rtrend > 0
+    downTrend <- isTrend & rtrend < 0
+    shape[downTrend] <- "downward_triangle"
+    shape[upTrend] <- "upward_triangle"
+    statusFit <- !trendFit & nyfit >= 3
+    shape[statusFit] <- "small_filled_circle"
+    shape[!trendFit & !statusFit] <- "small_open_circle"
+    shape
+  })
+  
+}
+
