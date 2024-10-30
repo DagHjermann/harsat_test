@@ -96,6 +96,9 @@ get_assessment_data <- function(
 
 get_trend_symbols <- function(assessment_object, alpha = 0.05){
   
+  # NOTE: finds recent trend (using 'prtrend', 'rtrend', 
+  #   not 'pltrend', 'ltrend')
+  
   # Get all summaries (empty or not)
   summ_all <- purrr::map(assessment_object$assessment, "summary")
   # names(summ_all)[1:3]
@@ -114,7 +117,7 @@ get_trend_symbols <- function(assessment_object, alpha = 0.05){
   # - Only change: 'summary' in line 1 and 2 replaced with 'summ'
   with(summ, {
     shape <- character(nrow(summ))
-    trendFit <- !is.na(pltrend)
+    trendFit <- !is.na(pltrend)     # this is for long trend, but this just checks whether we got a trend
     shape[trendFit] <- "large_filled_circle"
     isTrend <- !is.na(prtrend) & prtrend < alpha
     upTrend <- isTrend & rtrend > 0
