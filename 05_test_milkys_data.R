@@ -5,6 +5,8 @@
 # install.packages(c("glue", "cli", "rlang", "utf8", "fansi", "Rcpp", "stringi", "digest", "purrr"))
 # devtools::install("../harsat")
 # remotes::install_github("osparcomm/HARSAT@main")
+# if "HTTP error 401. Bad credentials"
+#   
 # remotes::install_local("~/Downloads/harsat_0.1.2.tar")
 
 # help(package = "harsat")
@@ -266,6 +268,7 @@ readr::write_csv(
 # read_data ------------------------------------------------------------------------
 #
 
+# debugonce(read_data)
 biota_data <- read_data(
   compartment = "biota",
   purpose = "OSPAR",
@@ -306,6 +309,18 @@ if ("country" %in% names(biota_data$data))
   biota_data$data$country <- NULL
 if ("station_name" %in% names(biota_data$data))
   biota_data$data$station_name <- NULL
+
+# debugonce(harsat:::convert_to_target_basis)
+
+# debug: data[id] <- lapply(data[id], ctsm_convert_basis, from = data[["LIPIDWT%.basis"]], 
+#                           to = "W", drywt = data[["DRYWT%"]], drywt_censoring = data[["DRYWT%.censoring"]], 
+#                           print_warning = FALSE)
+# Browse[2]> 
+#   Error in `[.data.frame`(data, id) : undefined columns selected  
+
+
+# debugonce(create_timeseries)
+# debugonce(harsat:::merge_auxiliary)
 
 biota_timeseries <- create_timeseries(
   biota_data,
@@ -349,6 +364,7 @@ str(biota_timeseries$info$thresholds, 1)
 # nrow(biota_timeseries$timeSeries)
 # View( biota_timeseries$timeSeries)
 
+
 #
 # We pick just a few, using the 'subset' option in 'biota_assessment'  
 # IMPROVEMENT (documentation):
@@ -382,6 +398,18 @@ if (rerun_assessment){
   biota_assessment <- readRDS("data/example_external_data/OSPAR_NO_2022_assessment.rds")
 }
 
+#
+# check_assessment (checks convergence) ---------------------------------------------
+#
+
+check_assessment(biota_assessment, save_result = FALSE)
+# Only one!
+
+
+#
+# look into assessment object ----------------------------------------------------------------------
+#
+
 # the original time series:
 head(biota_assessment$timeSeries, 2)
 
@@ -400,18 +428,61 @@ i <- which(!lacking)[1]
 i
 str(biota_assessment$assessment[[i]], 1)
 
+# get summaries  
+summ_all <- purrr::map(biota_assessment$assessment, "summary")
+names(summ_all)[1:3]
+summ_all[[2]]
+summ_has_result <- purrr::map_lgl(summ_all, \(.) length(.) > 0)
+summ_has_result[1:3]
+summ <- summ_all[summ_has_result] %>% bind_rows()
+summ$series <- names(summ_all[summ_has_result])
+summ %>% 
+  filter(series == "4684 CD Gadus morhua LI NA")
+  
+# get contrasts
+contr_all <- purrr::map(biota_assessment$assessment, "contrasts")
+is.data.frame(contr_all[[2]])
+contr_has_result <- purrr::map_lgl(contr_all, is.data.frame)
+contr <- contr_all[contr_has_result]
+contr[["4684 CD Gadus morhua LI NA"]]
+
+str(biota_assessment, 1)
+str(biota_assessment$assessment[["4684 CD Gadus morhua LI NA"]], 1)
+fitt <- biota_assessment$assessment[["4684 CD Gadus morhua LI NA"]]$pred
+harsat:::ctsm.lmm.contrast(fitt, 2003, 2022)
+
 #
 # Get trends using self-defind function 'get_trend_symbol'  
 #
 get_trend_symbols(biota_assessment)
 
+
 #
-# check_assessment (checks convergence) ---------------------------------------------
+# run_assessment, one series ------------------------------------------------------
 #
 
-check_assessment(biota_assessment, save_result = FALSE)
-# Only one!
 
+# Single parameters  
+# params <- c("CB118", "CD")
+# sel_series <- biota_timeseries$timeSeries$determinand %in% params
+
+# Single series  
+sel_series <- rownames(biota_timeseries$timeSeries) %in% "4684 CD Gadus morhua LI NA"
+
+length(sel_series)
+sum(sel_series)
+
+  assessm <- run_assessment(
+    biota_timeseries,
+    subset = sel_series,
+    AC = NULL,
+    get_AC_fn = NULL,
+    recent_trend = 20,
+    parallel = FALSE, 
+    extra_data = NULL,
+    control = list(power = list(target_power = 80, target_trend = 10)) 
+  )
+  
 #
 # write_summary_table ----------------------------------------------------------------------
 #
