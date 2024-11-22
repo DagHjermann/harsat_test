@@ -40,6 +40,16 @@ params2 <- df$determinand |> unique() |> sort()
 xtabs(~station_name, df %>% filter(grepl("36A", station_name)))
 xtabs(~station_name + year, df %>% filter(grepl("36A", station_name)))
 
+# check new parameters  
+df_new_pars <- read_csv("data/full_OSPAR_2023/Param 2022 lack data 2023.txt")
+table(addNA(df_new_pars$`Lacking, priority`))
+df_new_pars <- df_new_pars %>%
+  filter(`Lacking, priority` %in% 2:3)
+setdiff(df_new_pars$PARAM, params2)
+# "Mirex" "Nonaklor, trans-" "Oxyklordan" "PROTV" 
+# "Toksafen Parlar 26" "Toksafen Parlar 50"
+# "Toksafen Parlar 62"
+
 # new info
 newinfo <- readRDS("data/full_OSPAR_2023/info.rds")
 df <- newinfo$determinand
@@ -51,7 +61,77 @@ params2b <- rownames(df) |> unique() |> sort()
 
 setdiff(params2b, params1b)
 
+#
+# fix data ----------------------------------------------------------------------
+#
 
+if (FALSE){
+  
+  # copy oldfile
+  # dir("data/full_OSPAR_2023")
+  # file.copy("data/full_OSPAR_2023/raw_data.csv",
+  #           "data/full_OSPAR_2023/raw_data_OLD1.csv")
+  
+  # existing in info$determinands, but must be renamed: 
+  # KRYSEN = CHR
+  # HEPTAKLOR EPOKSID = HCEPX
+  # TRANS-HEPTAKLOREPOKSID = HCEPT
+  # will be added to info$determinands, but change them here first: 
+  # PERFLUORDEKANSULFONAT (PFDS) = PFDS
+  # PERFLUORTRIDEKANSYRE (PFTRA) = PFTRA
+  
+  # Change KRYSEN to CHR
+  fn <- "data/full_OSPAR_2023/raw_data.csv"
+  df <- readr::read_csv(fn)
+  sel <- df$determinand %in% "KRYSEN"; sum(sel)
+  df$determinand[sel] <- "CHR"
+  sel <- df$determinand %in% "HEPTAKLOR EPOKSID"; sum(sel)
+  df$determinand[sel] <- "HCEPX"
+  sel <- df$determinand %in% "TRANS-HEPTAKLOREPOKSID"; sum(sel)
+  df$determinand[sel] <- "HCEPT"
+  sel <- df$determinand %in% "PERFLUORDEKANSULFONAT (PFDS)"; sum(sel)
+  df$determinand[sel] <- "PFDS"
+  sel <- df$determinand %in% "PERFLUORTRIDEKANSYRE (PFTRA)"; sum(sel)
+  df$determinand[sel] <- "PFTRA"
+  
+  #
+  # station 71G (imposex-> intersex)
+  #
+  sel <- df$station_name %in% "71G Fugløyskjær" & df$determinand %in% c("VDSI.PLUS1", "INTERSEX")
+  xtabs(~year + species, df[sel,])
+  # 1. 
+  sel <- df$station_name %in% "71G Fugløyskjær" & df$determinand %in% c("VDSI.PLUS1")
+  xtabs(~year + species, df[sel,])
+  df$determinand[sel] <- "VDSI.INTERSEX.PLUS1"
+  df$species[sel] <- "N. lapillus L. littorea"
+  # 2
+  sel <- df$station_name %in% "71G Fugløyskjær" & df$determinand %in% c("INTERSEX")
+  df$determinand[sel] <- "VDSI.INTERSEX.PLUS1"
+  df$unit[sel] <- "ug/kg"
+  df$value[sel] <- df$value[sel] + 1
+  df$species[sel] <- "N. lapillus L. littorea"
+  # check
+  sel <- df$station_name %in% "71G Fugløyskjær" & df$determinand %in% c("VDSI.INTERSEX.PLUS1")
+  xtabs(~year + species + determinand + unit, df[sel,])
+  
+  
+
+  
+  readr::write_csv(df, fn, na = "")
+  # NOTE: important to put na = ""!
+  # - the default is na = "NA", which is not allowed, it should be "" 
+  # - this will go unnoticed until 'create_timeseries' when over-LOQ values will
+  # mysteriously be deleted (it gives a message, but there are many messages so it
+  # easily goes unnoticed)
+  # - see code of 'harsat:::check_censoring ' (which is called from 'create_timeseries'):
+  #   data <- ctsm_check(data, 
+  #                      !censoring %in% c("", "D", "Q", "<"), 
+  #                      action = "delete", 
+  #                      message = "Unrecognised censoring values", 
+  #                      file_name = "censoring_codes_unrecognised", 
+  #                      info = info)
+  
+}
 
 
 #
@@ -60,7 +140,7 @@ setdiff(params2b, params1b)
 
 # debugonce(read_data)
 # OLD data
-biota_data <- read_data(
+biota_data_1 <- read_data(
   compartment = "biota",
   purpose = "OSPAR",
   contaminants = "OSPAR_NO_2022.csv",   # NB, replace biota data filename above, as appropriate 
@@ -71,7 +151,7 @@ biota_data <- read_data(
 )
 
 # NEW data
-biota_data <- read_data(
+biota_data_1 <- read_data(
   compartment = "biota",
   purpose = "OSPAR",
   contaminants = "raw_data.csv",   # NB, replace biota data filename above, as appropriate 
@@ -81,15 +161,15 @@ biota_data <- read_data(
   info_dir = file.path("information", "OSPAR_2022")
 )
 
-str(biota_data, 1)
-str(biota_data$info, 1)
-str(biota_data$info$thresholds, 1)
+str(biota_data_1, 1)
+str(biota_data_1$info, 1)
+str(biota_data_1$info$thresholds, 1)
 
 #
 # tidy_data  ------------------------------------------------------
 #
 
-biota_data <- tidy_data(biota_data)
+biota_data <- tidy_data(biota_data_1)
 
 
 # debugonce(create_timeseries)
@@ -140,6 +220,145 @@ biota_data$info <- newinfo
 biota_data$info$determinand %>% tail(10)
 
 #
+# add to info file ---------------------------------------------
+#
+
+# BBJF  - already in info file, it turns out!
+# BKF   - already in info file, it turns out! 
+
+# PFDCA      
+# PFHPA
+# PFHXA
+# PERFLUORDEKANSULFONAT (PFDS) = PFDS
+# PERFLUORTRIDEKANSYRE (PFTRA) = PFTRA
+
+# HEPTAKLOR
+# DOT
+# MOT
+
+info <- biota_data$info
+table(info$determinand$pargroup)
+
+# Make new rows 
+new_row <- info$determinand[c("BAP","BAP"),]
+rownames(new_row) <- c("BBJF", "BKF")            # HARD-CODED - see dat_orig_6
+new_row$common_name <- rownames(new_row)
+# new_row$biota_sd_constant <- NA
+# new_row$biota_sd_variable <- NA
+new_row
+new_row1 <- new_row                              # HARD-CODED
+
+# Make new rows
+new_row <- info$determinand[rep("PFUNDA",5),]
+rownames(new_row) <- c(
+  "PFDCA" , "PFHPA", "PFHXA", "PFDS", "PFTRA")            # HARD-CODED - see dat_orig_6
+new_row$common_name <- rownames(new_row)
+# new_row$biota_sd_constant <- NA
+# new_row$biota_sd_variable <- NA
+new_row
+new_row2 <- new_row                             # HARD-CODED
+
+# Make new rows
+new_row <- info$determinand[rep("HCEPT",1),]
+rownames(new_row) <- c("HEPTAKLOR")            # HARD-CODED - see dat_orig_6
+new_row$common_name <- rownames(new_row)
+# new_row$biota_sd_constant <- NA
+# new_row$biota_sd_variable <- NA
+new_row
+new_row3 <- new_row                             # HARD-CODED
+
+# Make new rows
+new_row <- info$determinand[rep("TBSN+",2),]
+rownames(new_row) <- c("DOT", "MOT")            # HARD-CODED - see dat_orig_6
+new_row$common_name <- rownames(new_row)
+# new_row$biota_sd_constant <- NA
+# new_row$biota_sd_variable <- NA
+new_row
+new_row4 <- new_row                             # HARD-CODED
+
+# Make new rows
+new_row <- info$determinand[rep("VDSI.PLUS1",1),]
+rownames(new_row) <- c("VDSI.INTERSEX.PLUS1")            # HARD-CODED - see dat_orig_6
+new_row$common_name <- rownames(new_row)
+# new_row$biota_sd_constant <- NA
+# new_row$biota_sd_variable <- NA
+new_row
+new_row5 <- new_row                             # HARD-CODED
+
+# PAH metabolites + ALAD - exist in the info file,
+#   but change it to a "pesticide", j
+sel_modify <- rownames(info$determinand) %in% c("BAP3OH", "PA1OH", "PYR1OH", "ALAD") # HARD-CODED
+info$determinand[sel_modify,]
+# change group to pesticide
+info$determinand$pargroup <- "O-HER"
+info$determinand$biota_group  <- "Pesticides"
+info$determinand$biota_unit <- "ug/kg"
+# remove fish length (LNMEA):
+info$determinand$biota_auxiliary   <- "LIPIDWT%~DRYWT%"
+info$determinand[sel_modify,]
+
+# PAH metabolites + ALAD: must also change unit in the data
+str(biota_data, 1)
+sel <- biota_data$data$determinand %in% c("BAP3OH", "PA1OH", "PYR1OH", "ALAD")  
+sum(sel)
+biota_data$data$unit[sel] <- "ug/kg"
+
+# sel2 <- biota_data$data$unit %in% "ng/min/mg protein"
+# table(biota_data$data$determinand[sel2])
+
+info_new <- info
+
+new_rows_all <- bind_rows(
+  new_row2, new_row3, new_row4, new_row5)  # turns out that BBJKF and BKF
+
+# Check that there is no overlap of names
+names1 <- rownames(info$determinand)
+names2 <- rownames(new_rows_all)
+
+# Should be empty - length(check) = 0
+check <- intersect(names1, names2)
+length(check)
+
+biota_data$info$determinand <- bind_rows(
+  info$determinand, 
+  new_rows_all)
+
+#
+# Add species "N. lapillus L. littorea"
+#
+
+info$species %>% head(3)
+sel <- info$species$reference_species %in% "Littorina littorea"
+info$species[sel,]
+new_row <- info$species[sel,]
+rownames(new_row) <- "N. lapillus L. littorea" 
+new_row$reference_species <- rownames(new_row)
+new_row$common_name <- "Dog whelk C. periwinkle"
+new_row
+
+biota_data$info$species <- bind_rows(
+  info$species, 
+  new_row)
+#
+# Fix 'censoring' ---------------------------------------------
+#
+# value 'NA' is not allowed, it should be '' 
+# see code of 'harsat:::check_censoring ' (which is called from 'create_timeseries'):
+#   data <- ctsm_check(data, 
+#                      !censoring %in% c("", "D", "Q", "<"), 
+#                      action = "delete", 
+#                      message = "Unrecognised censoring values", 
+#                      file_name = "censoring_codes_unrecognised", 
+#                      info = info)
+# the question is why only "CHR" was affecrted by this??
+
+
+# sel <- biota_data$data$censoring %in% "NA"
+# sum(sel)
+# biota_data$data$censoring[sel] <- ""
+
+
+#
 # create_timeseries --------------------------------------------
 #
 
@@ -147,9 +366,6 @@ oddities.dir <- file.path("oddities", "milkys")
 if (!dir.exists(oddities.dir)) {
   dir.create(oddities.dir, recursive = TRUE)
 } 
-
-# debugonce(create_timeseries)
-
 
 # biota_data$data should not include country and station_name  
 # - will lead to an error in left_join on station_code
@@ -178,6 +394,14 @@ cat("Number of time series created:", nrow(biota_timeseries$timeSeries), "\n")
 # Check that HG.LENADJ is included in 'biota_timeseries'  
 biota_data$data %>% filter(grepl("HG", determinand)) %>% xtabs(~determinand, .)
 biota_timeseries$data %>% filter(grepl("HG", determinand)) %>% xtabs(~determinand, .)
+
+# Check that PYR1OH is included in 'biota_timeseries'  
+biota_data$data %>% filter(grepl("PYR", determinand)) %>% xtabs(~determinand, .)
+biota_timeseries$data %>% filter(grepl("PYR", determinand)) %>% xtabs(~determinand, .)
+
+# parameters starting with "B"
+biota_data$data %>% filter(substr(determinand,1,1) == "B") %>% xtabs(~determinand, .)
+biota_data$data %>% filter(substr(determinand,1,1) == "V") %>% xtabs(~determinand, .)
 
 #
 # run_assessment (test) ------------------------------------------------------
@@ -301,10 +525,39 @@ if (rerun_assessment){
 #
 
 #
-# Select only by parameters  
+# Select only by parameters (1) 
 #
 params <- c("SPAH15", "SPAH16", "VDSI.PLUS1", "EROD.BOTHSEXES", 
             "HG.LENADJ", "D4", "D4", "D4")
+sel_series1 <- biota_timeseries$timeSeries$determinand %in% params
+sel_series <- sel_series1
+
+
+#
+# Select only by parameters (2) 
+#
+# OSPAR_NO_2023_assessment_extra04.rds
+#
+params <- c("D5", "D6")
+sel_series1 <- biota_timeseries$timeSeries$determinand %in% params
+sel_series <- sel_series1
+
+#
+# Select only by parameters (3) 
+#
+# OSPAR_NO_2023_assessment_extra05.rds
+#
+params <- rownames(new_rows_all)
+params <- c(params, "CHR")       # add CHR (chrysen), as these now combine KRYSEN and CHR
+sel_series1 <- biota_timeseries$timeSeries$determinand %in% params
+sel_series <- sel_series1
+
+#
+# Select only by parameters (4) 
+#
+# OSPAR_NO_2023_assessment_extra06.rds
+#
+params <- "VDSI.INTERSEX.PLUS1"
 sel_series1 <- biota_timeseries$timeSeries$determinand %in% params
 sel_series <- sel_series1
 
@@ -319,22 +572,25 @@ sel_series <- sel_series1
 # Select only by stations    
 #
 nivacodes <- c("36A1", "227G2")
-# Function to find OSPAR station code (a number) from NIVA station code  
-# Note
-find_station_code <- function(nivacode, timeseries_object){
-  sel <- grepl(nivacode, timeseries_object$stations$station_name)
-  result <- timeseries_object$stations$station_code[sel]
-  if (length(result) > 1){
-    stop("More than one station found!")
-  }
-  result
-}
-# test 
 osparcodes <- c(find_station_code("36A1", biota_timeseries),  
                 find_station_code("227G2", biota_timeseries))  
 sel_series1 <- biota_timeseries$timeSeries$station_code %in% osparcodes  
 sel_series <- sel_series1
 # 13 minutes processing time
+
+
+#
+# Select by stations and parameters    
+#
+# OSPAR_NO_2023_assessment_extra07.rds
+#
+nivacodes <- c("15B", "23B", "30B", "53B")
+# load 'find_station_code' above
+osparcodes <- purrr::map_chr(nivacodes, \(x) find_station_code(x, biota_timeseries))
+sel_series1 <- biota_timeseries$timeSeries$station_code %in% osparcodes  
+sel_series2 <- biota_timeseries$timeSeries$determinand %in% c("BAP3OH", "PA1OH", "PYR1OH", "ALAD")
+sel_series <- sel_series1 & sel_series2
+
 
 #
 # Number of series selected
@@ -343,14 +599,14 @@ message(sum(sel_series), " series selected")
 
 rerun_assessment <- FALSE
 rerun_assessment <- TRUE
-save_path <- "data/full_OSPAR_2023/OSPAR_NO_2023_assessment_extra03.rds"  # UPDATE
+save_path <- "data/full_OSPAR_2023/OSPAR_NO_2023_assessment_extra07.rds"  # UPDATE
 
 if (rerun_assessment){
   
   if (file.exists(save_path)){
     stop("NOTE: The file ", sQuote(save_path), " already exists")
   } else {
-    message("No file wil be overewritten")
+    message("No file will be overewritten")
   }
   
   # Note: if you run using 'parallel = TRUE', you cannot see which determinand caused
@@ -384,7 +640,7 @@ if (rerun_assessment){
 }
 
 
-#
+# 
 # check_assessment (checks convergence) ---------------------------------------------
 #
 
@@ -404,6 +660,21 @@ length(biota_assessment$assessment)
 lacking <- purrr::map_lgl(biota_assessment$assessment, is.null)
 cat(100*mean(lacking), "percent of the", length(lacking), "time series were not assessed")
 cat(sum(!lacking), "time series were assessed")
+
+# add station_name to time series  
+biota_assessment$timeSeries <- biota_assessment$timeSeries %>%
+  left_join(biota_assessment$stations %>% select(station_code, station_name))
+
+sel <- biota_assessment$timeSeries$determinand == "CHR"
+sum(sel)
+biota_assessment$timeSeries$station_name[sel]
+sel <- biota_assessment$timeSeries$determinand == "CHR" &
+  grepl("Single", biota_assessment$timeSeries$station_name)
+sum(sel)
+
+assm <- biota_assessment$assessment[sel][[1]]
+str(assm, 1)
+assm$fullData
 
 # check the assessment object of the first time series
 i <- 1
