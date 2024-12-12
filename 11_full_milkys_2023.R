@@ -41,7 +41,7 @@ xtabs(~station_name, df %>% filter(grepl("36A", station_name)))
 xtabs(~station_name + year, df %>% filter(grepl("36A", station_name)))
 
 # check new parameters  
-df_new_pars <- read_csv("data/full_OSPAR_2023/Param 2022 lack data 2023.txt")
+df_new_pars <- read_csv("data/full_OSPAR_2023/Param 2022 lack data 2023.csv")
 table(addNA(df_new_pars$`Lacking, priority`))
 df_new_pars <- df_new_pars %>%
   filter(`Lacking, priority` %in% 2:3)
@@ -422,11 +422,16 @@ params <- c("CB118", "CD")
 params <- c("CD")
 params <- c("HG.LENADJ")
 params <- c("D4", "D4", "D4")
+params <- c("SCB7")
 sel_series1 <- biota_timeseries$timeSeries$determinand %in% params
 sel_series2 <- biota_timeseries$timeSeries$species %in% "Gadus morhua"
 sel_series2 <- biota_timeseries$timeSeries$species %in% "Mytilus edulis"
+sel_series3 <- biota_timeseries$timeSeries$station_code %in% c("5104", "4689", "5031", "4878", "5019", "12204", "4848", "4850", "4855")
+sel_series3 <- biota_timeseries$timeSeries$station_code %in% c("4850")
 # Pick only the first 2
 # sel_series <- sel_series & cumsum(sel_series) <= 2
+sel_series <- sel_series1 & sel_series2
+sel_series <- sel_series1 & sel_series2 & sel_series3
 sum(sel_series)
 
 params <- c("EROD.BOTHSEXES", "SPAH15", "SPAH16", "VDSI.PLUS1",
@@ -453,9 +458,25 @@ sel_series_names <- rownames(biota_timeseries$timeSeries)[sel_series]
 
 setdiff(params, names(biota_timeseries$info$determinand))
 
-
+# check selection
 length(sel_series)
 sum(sel_series)
+
+# check data
+check_timeseries <- biota_timeseries$timeSeries[sel_series,]
+check_data <- biota_timeseries$data %>%
+  filter(seriesID %in% rownames(check_timeseries))
+table(addNA(check_data$censoring))
+gg <- ggplot(check_data, aes(year, value, color = censoring)) +
+  geom_point() +
+  facet_wrap(vars(determinand, station_code))
+gg
+# Check assessment
+assess_path <- "data/full_OSPAR_2023/OSPAR_NO_2023_assessment_01_extra.rds"
+assess <- readRDS(assess_path)
+# str(assess, 1)
+sel_check <- rownames(check_timeseries) %in% rownames(assess$timeSeries)
+sum(sel_check)
 
 rm(biota_assessment_extra)
 
@@ -667,6 +688,7 @@ biota_assessment$timeSeries <- biota_assessment$timeSeries %>%
 
 sel <- biota_assessment$timeSeries$determinand == "CHR"
 sum(sel)
+biota_assessment$timeSeries[sel,]
 biota_assessment$timeSeries$station_name[sel]
 sel <- biota_assessment$timeSeries$determinand == "CHR" &
   grepl("Single", biota_assessment$timeSeries$station_name)
