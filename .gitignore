@@ -1,4 +1,12 @@
 .Rproj.user
 .Rhistory
 .RData
-.Ruserdata
+.Ruserdata  
+# Don't include 'data' folder, except data for stations 30A and 30B  
+data/*
+!data/example_OSPAR/
+data/example_OSPAR/*
+!data/example_OSPAR/biota_30A_Gressholmen.txt
+!data/example_OSPAR/biota_30B_Oslo.txt
+
+
