@@ -8,5 +8,10 @@ data/*
 data/example_OSPAR/*
 !data/example_OSPAR/biota_30A_Gressholmen.txt
 !data/example_OSPAR/biota_30B_Oslo.txt
+!data/example_OSPAR/stations_30A_30B.txt
+# Include 'information/OSPAR_2022' folder  
+information/*
+!information/OSPAR_2022
+
 
 
