@@ -1,5 +1,5 @@
 
-# Packages -------------------------------------------
+# 1. Packages -------------------------------------------
 
 # install.packages(c("glue", "cli", "rlang", "utf8", "fansi", "Rcpp", "stringi", "digest", "purrr"))
 # devtools::install("../harsat")
@@ -13,46 +13,48 @@ library(dplyr)
 library(readr)
 
 #
-# check data, make subset csv files ----
+# 2. Make subset csv files ----
+# NOTE: not needed  
 #
 
-# readLines(("data/example_OSPAR/biota.txt"), 3)
-dat_all <- read.csv("data/example_OSPAR/biota.txt", sep = "\t", header = TRUE, stringsAsFactors = FALSE)
-xtabs(~country, dat_all)
-xtabs(~statn, dat_all %>% filter(country == "Norway"))
-xtabs(~statn, dat_all %>% filter(grepl("30", statn)))
+# Read big file
+# dat_all <- read.csv("data/example_OSPAR/biota.txt", sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+# xtabs(~country, dat_all)
+# xtabs(~statn, dat_all %>% filter(country == "Norway"))
+# xtabs(~statn, dat_all %>% filter(grepl("30", statn)))
 
-dat_sel <- dat_all %>% filter(grepl("30A Gressholmen", statn))
-xtabs(~param, dat_sel)
-write.table(dat_sel, "data/example_OSPAR/biota_30A_Gressholmen.txt", sep = "\t", row.names = FALSE)
-write_csv(dat_sel, "data/example_OSPAR/biota_30A_Gressholmen.csv")
+# # Creating subset 1
+# dat_sel <- dat_all %>% filter(grepl("30A Gressholmen", statn))
+# xtabs(~param, dat_sel)
+# write.table(dat_sel, "data/example_OSPAR/biota_30A_Gressholmen.txt", sep = "\t", row.names = FALSE)
 
-dat_sel <- dat_all %>% filter(grepl("30B Oslo City area", statn))
-xtabs(~param, dat_sel)
-write.table(dat_sel, "data/example_OSPAR/biota_30B_Oslo.txt", sep = "\t", row.names = FALSE)
-write_csv(dat_sel, "data/example_OSPAR/biota_30B_Oslo.csv")
+# # Creating subset 2
+# dat_sel <- dat_all %>% 
+#   filter(grepl("30B Oslo City area", statn) & PARAM %in% c("CD", "PB", "PFOS", "PFO"))
+# xtabs(~param, dat_sel)
+# write.table(dat_sel, "data/example_OSPAR/biota_30B_Oslo.txt", sep = "\t", row.names = FALSE)
 
-table(dat_sel, dat_sel$qflag)
+# # Creating subset of stations file
+# dat <- read_delim("data/example_OSPAR/stations.txt", guess_max = 13000)
+# sel <- dat$station_name %in% c("30A Gressholmen", "30B Oslo City area")
+# sum(sel)   # 6 rows
+# dat_sel <- dat[sel,]
+# write_delim(dat_sel, "data/example_OSPAR/stations_30A_30B.txt")
 
-dat_sel <- dat_all %>% 
-  filter(grepl("30B Oslo City area", statn) & PARAM %in% c("CD", "PB", "PFOS", "PFO"))
-xtabs(~param, dat_sel)
-write.table(dat_sel, "data/example_OSPAR/biota_30B_Oslo.txt", sep = "\t", row.names = FALSE)
-write_csv(dat_sel, "data/example_OSPAR/biota_30B_Oslo.csv")
-
-# test
-# dat_sel <- read.csv("data/example_OSPAR/biota_30A_Gressholmen.txt", sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+test <- read_delim("data/example_OSPAR/stations_30A_30B.txt")
 
 #
-# Read data --------------------------------------------
+# 3. Read data --------------------------------------------
 #
 
+# debugonce(read_data)
+# debugonce(read_stations)
 biota_data <- read_data(
   compartment = "biota", 
   purpose = "OSPAR",                               
   contaminants = "biota_30B_Oslo.txt", 
-  stations = "stations.txt", 
-  data_dir = file.path("data", "example_ospar"),         ## i.e., C:\Users\test\ospar\data
+  stations = "stations_30A_30B.txt", 
+  data_dir = file.path("data", "example_OSPAR"),         ## i.e., C:\Users\test\ospar\data
   info_dir = file.path("information", "OSPAR_2022"),  ## i.e., C:\Users\test\ospar\information
   extraction = "2023/08/23"
 )
