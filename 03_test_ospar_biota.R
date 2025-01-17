@@ -35,13 +35,13 @@ library(readr)
 # write.table(dat_sel, "data/example_OSPAR/biota_30B_Oslo.txt", sep = "\t", row.names = FALSE)
 
 # # Creating subset of stations file
+# readLines("data/example_OSPAR/stations.txt", 2)
 # dat <- read_delim("data/example_OSPAR/stations.txt", guess_max = 13000)
 # sel <- dat$station_name %in% c("30A Gressholmen", "30B Oslo City area")
 # sum(sel)   # 6 rows
-# dat_sel <- dat[sel,]
-# write_delim(dat_sel, "data/example_OSPAR/stations_30A_30B.txt")
-
-test <- read_delim("data/example_OSPAR/stations_30A_30B.txt")
+# dat_sel <- dat[sel,] %>% select(-station_geometry)
+# write_delim(dat_sel, "data/example_OSPAR/stations_30A_30B.txt", delim = "\t")
+# readLines("data/example_OSPAR/stations_30A_30B.txt", 2)
 
 #
 # 3. Read data --------------------------------------------
