@@ -62,10 +62,17 @@ biota_data <- read_data(
   info_dir = file.path("information", "OSPAR_2022"),  ## i.e., C:\Users\test\ospar\information
   extraction = "2023/08/23"
 )
+# this creates some warnings, such as 
+#   'not all columns named in 'colClasses' exist'
+# and 
+#   'NAs introduced by coercion' 
+# which can be ignored in this case
 
-
-# View(biota_data$data)
+# check which data that 'survived':
 xtabs(~station_submitted + determinand, biota_data$data)
+
+# View data:
+# View(biota_data$data)
 
 
 #
@@ -74,9 +81,8 @@ xtabs(~station_submitted + determinand, biota_data$data)
 
 biota_data <- tidy_data(biota_data)
 
-str(biota_data, 1)
-str(biota_data$info, 1)
-ctsm_get_determinands(biota_data$info)
+# all the data 'survived':
+xtabs(~station_code + determinand, biota_data$data)
 
 #
 # 5. Construct timeseries ---------------------------------
@@ -98,25 +104,32 @@ biota_timeseries <- create_timeseries(
 # Object resulting from this is a list with 6 items:
 str(biota_timeseries, 1)
 
-# ...including 'timeSeries' which is a data frame with one row per time series:
-str(biota_timeseries$timeSeries, 1)
+# ...including 'timeSeries' which is a data frame with one row per time series.
+# Note that only 4 time series were made, as DRYWT% and EXLIP% are not contaminants,
+#   but may be needed for converting to different bases.
+biota_timeseries$timeSeries
 
-# ... 'data' which is the raw data:
+# 'data' is the raw data:
 str(biota_timeseries$data, 1)
 
-# ... 'stations' which is the list of stations:
-str(biota_timeseries$stations, 1)
+# ... 'stations' is still the list of stations:
+biota_timeseries$stations
 
-# ... and 'info' which is a list of different stuff including 'determinand' (the substances)
+# ... and 'info' which is a list of different stuff, including 
+# ... 'determinand' (the substances)
 str(biota_timeseries$info$determinand, 1)
 # ... and 'species' which contains values for converting between wet-weight and dry-weight etc.
 str(biota_timeseries$info$species, 1)
+
+# check them out using 
+# View(biota_timeseries$info$determinand)
+# View(biota_timeseries$info$species)
 
 
 #
 # 6. Assessment -------------------------------------
 #
-# Runs time series analyses etc.
+# Runs the time series analyses itself
 #
 
 biota_assessment <- run_assessment(
