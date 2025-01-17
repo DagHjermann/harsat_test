@@ -1,6 +1,15 @@
+# - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - #
+# 
+# This is a script which performs HARSAT analysis of four time series in cod and blue mussel
+# from the inner Oslo fjord. It goes through all steps of HARSAT, and takes only a 
+# few minutes to run.
+#
+# - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - #
+
 
 # 1. Packages -------------------------------------------
 
+# The next lines are different options for installing HARSAT:
 # install.packages(c("glue", "cli", "rlang", "utf8", "fansi", "Rcpp", "stringi", "digest", "purrr"))
 # devtools::install("../harsat")
 # remotes::install_github("osparcomm/HARSAT@main")
