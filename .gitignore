@@ -1,17 +1,24 @@
 .Rproj.user
 .Rhistory
 .RData
-.Ruserdata  
-# Don't include 'data' folder, except data for stations 30A and 30B  
+.Ruserdata
+# Don't include 'data' folder, except data for stations 30A and 30B
 data/*
 !data/example_OSPAR/
 data/example_OSPAR/*
 !data/example_OSPAR/biota_30A_Gressholmen.txt
 !data/example_OSPAR/biota_30B_Oslo.txt
 !data/example_OSPAR/stations_30A_30B.txt
-# Include 'information/OSPAR_2022' folder  
+# Include 'information/OSPAR_2022' folder
 information/*
 !information/OSPAR_2022
-
-
-
+reports/*
+oddities/*
+output/*
+plots/*
+user_meeting_2024/*
+test.rda
+50_harsat_description.html
+50_harsat_description_files/*
+06_helcom.R
+import_functions_test.R
