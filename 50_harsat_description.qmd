@@ -1,0 +1,278 @@
+---
+title: "50_harsat_description"
+format: html
+---
+
+## read_data
+
+The `read_data` function in the `import_functions.R` file is designed to read contaminant and effects data, along with station dictionaries and reference tables, for the Harmonized Regional Seas Assessment Tool (HARSAT). 
+
+### Key Functionalities
+
+- **Parameters**:
+  - `compartment`: Type of data (e.g., `"biota"`, `"sediment"`, `"water"`).
+  - `purpose`: Specifies the default setup for `"OSPAR"`, `"HELCOM"`, `"AMAP"`, or `"custom"`.
+  - `contaminants`, `stations`: File references for contaminant and station data.
+  - `data_dir`, `info_dir`: Directories for data and reference tables.
+  - `data_format`: Format of data (`"ICES"` or `"external"`).
+  - Various other parameters for control settings and file paths.
+
+- **Returns**: A list containing the function call, reference tables and control parameters, contaminant data, and stations data.
+
+- **Data Processing**:
+  - Validates and processes input arguments.
+  - Reads and processes reference tables and data files.
+  - Matches data to stations and processes according to specified parameters.
+
+For more details, you can view the [import_functions.R file](https://github.com/osparcomm/HARSAT/blob/36924fa3fe3c16899272ead2eb287b3aec6a0851/R/import_functions.R).
+
+## output_timeseries
+
+The `output_timeseries` function processes environmental data to create a structured time series metadata object for further analysis. Here’s a high-level summary of its functionality:
+
+- **Data Ordering and Selection**: The function first orders and selects relevant variables from the input data based on predefined identifiers and any additional variables specified by the `extra` parameter.
+- **Auxiliary Data Handling**: It includes auxiliary variables from the `info` structure relevant to the data.
+- **Series ID Generation**: The function generates a unique `seriesID` for each time series by concatenating key identifiers.
+- **Duplication and Recency Check**: It checks for and removes duplicate measurements within each series and ensures that only series with recent data are retained.
+- **Station Dictionary Update**: The function updates the station dictionary to include only stations that have relevant data in the recent years.
+
+### Key Steps
+
+1. **Order and Select Data**:
+   ```r
+   data <- dplyr::arrange(data, dplyr::across(dplyr::any_of(id)))
+   data <- dplyr::select(data, dplyr::any_of(id))
+   ```
+2. **Create `seriesID`**:
+   ```r
+   timeSeries <- tidyr::unite(timeSeries, "seriesID", dplyr::all_of(names(timeSeries)), sep = " ", remove = FALSE, na.rm = TRUE)
+   data <- cbind(seriesID = timeSeries$seriesID, data)
+   ```
+3. **Check for Recent Data**:
+   ```r
+   is_recent_data <- (data$year %in% info$recent_years) & !is.na(data$concentration)
+   id <- data$seriesID[is_recent_data]
+   data <- data[data$seriesID %in% id, ]
+```
+ 
+
+### Usage
+
+The `output_timeseries` function is called within the `read_data` function, typically after reading and processing the raw contaminant data and station dictionary. Specifically, it’s invoked as follows:
+```r
+out <- output_timeseries(data, stations, info)
+```
+This call is made after the contaminant data and station dictionary are read and processed, ensuring that the `data`, `stations`, and `info` parameters are correctly prepared before being passed to `output_timeseries`. The returned list contains the processed data, updated stations, and the time series metadata.
+
+## run_assessment 
+
+I'll analyze how the `run_assessment` function works and break down its interactions with other functions.
+
+### Primary Purpose 
+
+Based on the documentation, this function assesses time series data for trends and status, fitting models to each time series and comparing them with thresholds. It appears to be part of a larger package (possibly called HARSAT) for time series analysis.
+
+The function seems to be primarily a wrapper that:
+
+- Sets up the assessment environment
+- Validates inputs
+- Delegates the actual assessment work to `assessment_engine`
+- Organizes the results
+
+Here's how the function works:
+
+### Input Setup
+
+- Takes a `ctsm_ob` object (appears to be a HARSAT object created by `create_timeSeries`)
+- Accepts various parameters for controlling the assessment process
+- Notable parameters include `AC` (threshold values), `recent_trend` (window for trend analysis), and `extra_data` for specialized assessments
+
+### Main Function Calls
+
+The function calls several other functions:
+
+```
+# Core function calls:
+1. get_AC[[ctsm_ob$info$compartment]] - Called conditionally if AC is provided but get_AC_fn is NULL
+2. run_control_default() - Gets default control parameters
+3. run_control_modify(cntrl, control) - Modifies control parameters with user input
+4. assessment_engine(ctsm_ob, series_id, parallel, ...) - Main workhorse function that performs the actual assessment
+```
+
+### Function Flow
+
+1. Stores the function call in the object
+2. Updates object information (recent.trend, AC, get_AC_fn)
+3. Performs validation for imposex assessments if needed
+4. Sets up control parameters by merging defaults with user input
+5. Initializes assessment list structure
+6. Determines which series to assess (either all or subset)
+7. Runs assessments using assessment_engine
+8. Updates object with results
+
+### Notable Dependencies
+
+- Appears to use `tibble` package for data manipulation
+- References a lifecycle badge, suggesting this is part of a package using the lifecycle package for feature staging
+- Has special handling for "Imposex" group data
+
+### Key Validation Steps
+
+- Checks for required `extra_data` when dealing with Imposex assessments
+- Warns about potential conflicts between `ctsm_ob$info` and control parameters
+- Handles subsetting of time series through evaluation of user-provided expressions
+
+
+## assessment_engine 
+
+I'll analyze how the `assessment_engine` function works - it appears to be the main workhorse function for performing the actual time series assessments.
+
+### Core Purpose
+The function processes individual time series data for trend analysis and assessment, with special handling for different types of data (particularly imposex data vs other measurements).
+
+Here's the detailed breakdown:
+
+### Initial Setup
+```r
+# Key data preparation steps:
+1. Extracts relevant time series from input object
+2. Filters data for selected series
+3. Processes station information
+```
+
+### Major Function Calls
+```r
+# Core external function calls:
+1. parallel::detectCores() & parallel::makeCluster() - For parallel processing
+2. get_index(determinand, x, info) - Constructs annual indices
+3. assess_imposex() - Handles imposex-specific assessments
+4. ctsm_get_info() - Gets distribution and status information
+5. assess_lmm() - Handles linear mixed model assessments
+6. check_convergence_lmm() - Checks model convergence
+```
+
+### Main Processing Flow
+1. Sets up parallel processing if requested
+2. Splits data by series ID
+3. Uses pbapply::pblapply to process each series with progress bar
+4. For each series:
+   - Gets series information
+   - Constructs annual index
+   - Gets assessment concentrations
+   - Performs either imposex or standard assessment
+
+### Branch Logic
+
+The function has two main processing branches:
+
+A. For Imposex Data (`determinand %in% c("VDS", "IMPS", "INTS")`):
+```r
+- Handles special imposex calculations
+- Processes confidence intervals
+- Calls assess_imposex()
+```
+
+B. For Other Data:
+```r
+- Handles distribution checks
+- Special handling for SFG (Scope For Growth) data
+- Performs linear mixed model assessment via assess_lmm()
+```
+
+### Key Dependencies
+
+- Uses dplyr for data filtering
+- Uses tibble for data frame operations
+- Uses pbapply for progress bars
+- Uses parallel for multi-core processing
+- Custom functions: get_index, assess_imposex, assess_lmm, ctsm_get_info
+
+### Output Structure
+
+Returns a list containing:
+- fullData: Original processed data
+- annualIndex: Calculated annual indices
+- AC: Assessment concentrations
+- Assessment results (either from assess_imposex or assess_lmm)
+- convergence information
+
+### Special Features
+
+- Handles missing data
+- Includes progress reporting
+- Special handling for uncertainty values
+- Different assessment paths based on data type
+- Optional parallel processing
+
+## assess_lmm  
+
+### Purpose
+
+The function appears to be designed for statistical analysis of linear mixed models (LMM), particularly focusing on trend analysis in time series data. It handles both normal and log-normal distributions, and includes capabilities for power analysis and model selection.
+
+### Main Function Calls
+
+1. **Data Preprocessing Functions:**
+   - `ctsm.test.below()` - Tests values below certain thresholds
+   - `ctsm.remove.early.lessThans()` - Removes early years with 'less-than' values
+
+2. **Model Fitting Functions:**
+   - `ctsm.lmm.fit()` - Fits linear mixed models with different degrees of smoothing
+   - `ctsm.lmm.hess()` - Computes Hessian matrix for the best-fit model
+   - `ctsm.lmm.contrast()` - Calculates contrasts for trend analysis
+   - `ctsm.lmm.refvalue()` - Compares fitted concentrations against reference values
+
+3. **Power Analysis Functions:**
+   - `ctsm_lmm_power()` - Computes power statistics
+   - `ctsm_dtrend()` - Calculates trend detection limits
+
+### Function Flow
+
+1. **Initial Setup:**
+   - Orders data by year
+   - Handles data distribution transformations (normal/lognormal)
+   - Sets up auxiliary variables
+
+2. **Data Quality Checks:**
+   - Verifies recent data exists
+   - Ensures adequate data coverage across time periods
+   - Handles special distributions through distribution-specific assessment functions
+
+3. **Model Selection:**
+   - Fits models of increasing complexity based on data availability:
+     - Mean level model (baseline)
+     - Linear trend model (≥5 years of data)
+     - Smooth models with 2-4 degrees of freedom (≥7, 10, 15 years respectively)
+   - Selects best model using AICc criterion
+
+4. **Analysis Components:**
+   - Variance component estimation
+   - Trend analysis (whole period and recent period)
+   - Reference value comparisons
+   - Power analysis
+   - Summary statistics compilation
+
+### Function Parameters
+
+Key parameters include:
+- `data`: Input dataset
+- `annualIndex`: Annual index values
+- `AC`: Assessment concentrations
+- `recent.years`: Years for recent trend analysis
+- `determinand`: Type of determinand being analyzed
+- `distribution`: Data distribution type
+- `good.status`: Direction of "good" status (high/low)
+- `choose_model`: Optional model selection override
+- `power`: Power analysis parameters
+
+### Output Structure
+
+Returns a list containing:
+- Data used in analysis
+- Model selection results
+- Fitted values and coefficients
+- Variance components
+- Trend analysis results
+- Reference value comparisons
+- Power analysis results
+- Comprehensive summary statistics
