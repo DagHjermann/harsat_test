@@ -132,3 +132,22 @@ get_trend_symbols <- function(assessment_object, alpha = 0.05){
   
 }
 
+
+# Function to find ICES station code (a number, but formatted as string) from NIVA station code  
+
+find_station_code <- function(nivacode, timeseries_object){
+  sel <- grepl(nivacode, timeseries_object$stations$station_name)
+  result <- timeseries_object$stations$station_code[sel]
+  if (length(result) > 1){
+    stop("More than one station found!")
+  }
+  result
+}
+
+if (FALSE){
+  # test 
+  osparcodes <- find_station_code("36A1", biota_timeseries)
+}
+
+                
+                
