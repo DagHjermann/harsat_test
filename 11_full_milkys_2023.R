@@ -80,9 +80,11 @@ if (FALSE){
   # PERFLUORDEKANSULFONAT (PFDS) = PFDS
   # PERFLUORTRIDEKANSYRE (PFTRA) = PFTRA
   
-  # Change KRYSEN to CHR
+  # Read original data
   fn <- "data/full_OSPAR_2023/raw_data.csv"
   df <- readr::read_csv(fn)
+
+  # Change KRYSEN to CHR
   sel <- df$determinand %in% "KRYSEN"; sum(sel)
   df$determinand[sel] <- "CHR"
   sel <- df$determinand %in% "HEPTAKLOR EPOKSID"; sum(sel)
@@ -114,10 +116,107 @@ if (FALSE){
   sel <- df$station_name %in% "71G Fugløyskjær" & df$determinand %in% c("VDSI.INTERSEX.PLUS1")
   xtabs(~year + species + determinand + unit, df[sel,])
   
-  
+  #
+  # OH-pyren (PYR1OH) at 15B
+  #
+  # Lacking 2001:2004, 2008:2014
+  df %>%
+    filter(grepl("15B", station_name) & determinand == "PYR1OH") %>%
+    xtabs(~year + determinand + station_name, .)  
+  # Get raw data
+  dat_105 <- readRDS("../Milkys2_pc/Files_from_Jupyterhub_2022/Raw_data/105_data_with_uncertainty_2023-09-12.rds")
+  # They lack lack 2001:2004, 2008:2014 for PYR1OH but not for PYR1O (adjusted data)
+  # Also, absorbance exists for most of these years (2001:2004 and 2011-2015, but not 2008-2010)
+  dat_105 %>%
+    filter(STATION_CODE == "15B" & PARAM %in% c("PYR1O", "PYR1OH", "AY380", "AY", "ABS380")) %>%
+    xtabs(~MYEAR + PARAM, .)
+  # Make data to add
+  dat_105_to_add_1 <- dat_105 %>%
+    filter(STATION_CODE == "15B" & PARAM %in% "PYR1O" & MYEAR %in% c(2001:2004, 2008:2014)) %>%
+    mutate(
+      PYR1O = VALUE_WW,
+      PARAM = "PYR1OH",
+      VALUE_WW = NA)
+  dat_105_absorbance <- dat_105 %>%
+    filter(STATION_CODE == "15B" & PARAM %in% c("AY", "AY380", "ABS380") & MYEAR %in% c(2001:2004, 2008:2014)) %>%
+    select(STATION_CODE, MYEAR, SAMPLE_NO2, VALUE_WW) %>%
+    rename(AY380 = VALUE_WW)
+  nrow(dat_105_to_add_1)
+  nrow(dat_105_absorbance)
+  dat_105_to_add_2 <- dat_105_to_add_1 %>%
+    left_join(dat_105_absorbance, join_by(STATION_CODE, SAMPLE_NO2, MYEAR), relationship = "many-to-one") %>%
+    # Make unnormalized data (also see scr. 172):
+    mutate(VALUE_WW = PYR1O*AY380)
+  nrow(dat_105_to_add_2)
+  # Format data in OSPAR format
+  # We start with the existing data - we will use the first row of this to create the 
+  #   "fixed" parts of the data we weill add
+  df_existing <- df %>%
+    filter(grepl("15B", station_name) & determinand == "PYR1OH")
+  # names(df_existing) %>% dput()
+  fixed_columns <- c("country", "station_code", "station_name", "sample_latitude", 
+                     "sample_longitude", "species", "sex", "n_individual", 
+                     "subseries", "sample", "determinand", "matrix", "basis", "unit", 
+                     "limit_detection", "limit_quantification", 
+                     "uncertainty", "unit_uncertainty", "method_pretreatment", "method_analysis", 
+                     "method_extraction")
+  dat_to_add_fixed <- df_existing[1, fixed_columns]
+  # Variable part of the data, reformatted to OSPAR value (and assuming sample date 15.10)
+  dat_to_add_variable <- dat_105_to_add_2 %>%
+    rename(
+      year = MYEAR, 
+      value = VALUE_WW) %>%
+    mutate(
+      censoring = case_when(
+        is.na(FLAG1) ~ as.character(NA),
+        !is.na(FLAG1) ~ "Q"),
+      date = lubridate::ymd(paste0(dat_105_to_add_2$MYEAR, "-10-15"))
+    ) %>%
+    select(year, date, value, censoring)
+  # Finally, create the data we will add:
+  dat_to_add <- bind_cols(
+    dat_to_add_fixed,
+    dat_to_add_variable)
+  df_new <- bind_rows(
+    df,
+    dat_to_add
+  ) 
+  # Check - the number of columns should be the same
+  dim(df)
+  dim(df_new)
+  # Write to csv file
+  readr::write_csv(df_new, fn, na = "")
 
   
+  #
+  # OH-pyren (PYR1OH) at 15B - fix "sample"
+  #
+  # when we did the stuff above to add extra PYR1OH, we also introduced a lot of duplicate 'sample'
+  #   specifically, 185 observations with sample = 5284
+  # these are deleted in create_timeseries ()
+  #
+  range(df$sample)
+  sel <- with(df, grepl("15B", station_name) & determinand == "PYR1OH")
+  df_existing <- df[sel,]
+  sum(sel)
+  plot(which(sel))
+  plot(which(sel), df_existing$year)
+  plot(which(sel), as.numeric(df_existing$sample))
+  table(df_existing$sample)
+  # Make new sample numbers for all with sample = 5284  
+  sel2 <- with(df, grepl("15B", station_name) & determinand == "PYR1OH" & sample == "5284")
+  n <- sum(sel2)
+  new_sample_start <- max(as.numeric(df$sample)) + 1
+  new_samples <- seq(new_sample_start, length.out = n)
+  new_samples_char <- as.character(new_samples)
+  # Give new sample numbers
+  df$sample[sel2] <- new_samples_char
+  
+  #
+  # Write to csv file
+  #
   readr::write_csv(df, fn, na = "")
+  
   # NOTE: important to put na = ""!
   # - the default is na = "NA", which is not allowed, it should be "" 
   # - this will go unnoticed until 'create_timeseries' when over-LOQ values will
@@ -164,6 +263,18 @@ biota_data_1 <- read_data(
 str(biota_data_1, 1)
 str(biota_data_1$info, 1)
 str(biota_data_1$info$thresholds, 1)
+
+# Check OH-pyren (PYR1OH) at 15B
+# Should now also include 2001:2004, 2008:2014 (see "fix data" part above)
+biota_data_1$data %>%
+  filter(grepl("15B", station_name) & determinand == "PYR1OH") %>% # View()
+  xtabs(~year + determinand + station_name, .)  
+
+biota_data_1$data %>%
+  filter(grepl("15B", station_name) & determinand == "PYR1OH") %>% # View()
+  ggplot(aes(year, value, color = addNA(censoring))) +
+  geom_jitter(width = 0.1)
+
 
 #
 # tidy_data  ------------------------------------------------------
@@ -376,6 +487,15 @@ if ("country" %in% names(biota_data$data))
 if ("station_name" %in% names(biota_data$data))
   biota_data$data$station_name <- NULL
 
+str(biota_data, 1)
+str(biota_data$data, 1)
+# biota_data_BACK <- biota_data
+# View(biota_data$stations )
+# View(biota_data$data)
+# biota_data$data <- biota_data$data %>%
+#   filter(determinand == "PYR1OH" & station_code == "4887")
+
+# debugonce(create_timeseries)
 biota_timeseries <- create_timeseries(
   biota_data,
   determinands = ctsm_get_determinands(biota_data$info),
@@ -387,6 +507,7 @@ biota_timeseries <- create_timeseries(
   normalise = FALSE,
   normalise.control = list()
 )
+# str(biota_timeseries, 1)
 
 # IMPROVEMENT: Could be added at the end of create_time series
 cat("Number of time series created:", nrow(biota_timeseries$timeSeries), "\n")
@@ -402,6 +523,17 @@ biota_timeseries$data %>% filter(grepl("PYR", determinand)) %>% xtabs(~determina
 # parameters starting with "B"
 biota_data$data %>% filter(substr(determinand,1,1) == "B") %>% xtabs(~determinand, .)
 biota_data$data %>% filter(substr(determinand,1,1) == "V") %>% xtabs(~determinand, .)
+
+biota_timeseries$data %>% filter(grepl("PYR1OH", determinand)) %>% 
+  ggplot(aes(year, value, color = addNA(censoring))) +
+  geom_jitter(width = 0.1)
+
+biota_timeseries$data %>% 
+  filter(grepl("PYR1OH", determinand)) %>% 
+  arrange(censoring) %>%
+  ggplot(aes(year, value, color = addNA(censoring))) +
+  geom_jitter(width = 0.1)
+
 
 #
 # run_assessment (test) ------------------------------------------------------
@@ -605,11 +737,12 @@ sel_series <- sel_series1
 #
 # OSPAR_NO_2023_assessment_extra07.rds
 #
+nivacodes <- c("15B")
 nivacodes <- c("15B", "23B", "30B", "53B")
 # load 'find_station_code' above
 osparcodes <- purrr::map_chr(nivacodes, \(x) find_station_code(x, biota_timeseries))
 sel_series1 <- biota_timeseries$timeSeries$station_code %in% osparcodes  
-sel_series2 <- biota_timeseries$timeSeries$determinand %in% c("BAP3OH", "PA1OH", "PYR1OH", "ALAD")
+sel_series2 <- biota_timeseries$timeSeries$determinand %in% c("PYR1OH")
 sel_series <- sel_series1 & sel_series2
 
 
@@ -619,8 +752,8 @@ sel_series <- sel_series1 & sel_series2
 message(sum(sel_series), " series selected")
 
 rerun_assessment <- FALSE
-rerun_assessment <- TRUE
-save_path <- "data/full_OSPAR_2023/OSPAR_NO_2023_assessment_extra07.rds"  # UPDATE
+# rerun_assessment <- TRUE
+save_path <- "data/full_OSPAR_2023/OSPAR_NO_2023_assessment_extra08.rds"  # UPDATE
 
 if (rerun_assessment){
   
@@ -726,25 +859,38 @@ contr_has_result <- purrr::map_lgl(contr_all, is.data.frame)
 contr <- contr_all[contr_has_result]
 contr[["4684 CD Gadus morhua LI NA"]]
 
-# fitted trend line
-str(biota_assessment, 1)
-str(biota_assessment$assessment[["4684 CD Gadus morhua LI NA"]], 1)
-fitted <- biota_assessment$assessment[["4684 CD Gadus morhua LI NA"]]$pred
+# fitted trend line for series by name
+series_name <- "4684 CD Gadus morhua LI NA"
+series_name <- "4887 PYR1OH Gadus morhua BI"
+str(biota_assessment$assessment[[series_name]], 1)
+fitted <- biota_assessment$assessment[[series_name]]$pred
 ggplot(fitted, aes(year, fit)) + 
   geom_path() +
   geom_path(aes(y = ci.lower), linetype = "dashed") +
   geom_path(aes(y = ci.upper), linetype = "dashed")
   
-harsat:::ctsm.lmm.contrast(fitt, 2004, 2023)
+# fitted trend line with data  
+fullData <- biota_assessment$assessment[[series_name]]$fullData
+annualIndex <- biota_assessment$assessment[[series_name]]$annualIndex
+
+ggplot(annualIndex, aes(year)) + 
+  scale_shape_manual(values = c("<" = 6), na.value = 16) +
+  geom_ribbon(data = fitted, aes(ymin = exp(ci.lower), ymax = exp(ci.upper)), fill = "lightblue") +
+  geom_path(data = fitted, aes(y = exp(fit))) +
+  geom_point(aes(y = exp(index), shape = censoring)) +
+  labs(
+    y = expression(Concentration*","*~mu*g/kg~(w.w.))
+  ) +
+  theme_bw()
+  
 
 #
 # Get trends using self-defined function 'get_trend_symbol'  
 #
-
-sel <- names(biota_assessment$assessment) == "4684 CD Gadus morhua LI NA"
+sel <- names(biota_assessment$assessment) == series_name
 sum(sel)
 get_trend_symbols(biota_assessment)[sel]
-debugonce(get_trend_symbols)
+# debugonce(get_trend_symbols)
 trend_symbols <- get_trend_symbols(biota_assessment)
 str(trend_symbols, 1)
 
